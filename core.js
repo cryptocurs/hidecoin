@@ -90,6 +90,10 @@ var screen = blessed.screen({
 
 screen.render()
 
+screen.key('f8', () => {
+  console.log(storage.servers)
+})
+
 screen.key('f9', () => {
   console.log('CORE: current time', hours.now())
 })
@@ -120,44 +124,163 @@ const Block = require('./lib/Block')
 const Tx = require('./lib/Tx')
 const Wallet = require('./lib/Wallet')
 const wallet = Wallet(login)
-var balances = {}
-var balancesUnconfirmed = {}
-var txs = {}
-var keys = {}
-var allAmount = 0
-var allAmountUnconfirmed = 0
+const walletData = {
+  balances: {},
+  balancesUnconfirmed: {},
+  txs: {},
+  keys: {},
+  allAmount: 0,
+  allAmountUnconfirmed: 0
+}
+const wallets = {}
+const walletsData = {}
 var opened = false
 
-var updateData = () => {
+var def = (value) => {
+  return value !== undefined
+}
+
+var updateData = (wallet, walletData) => {
   let addresses = wallet.getContent()
-  balances = {}
-  balancesUnconfirmed = {}
-  txs = {}
-  keys = {}
-  allAmount = 0
-  allAmountUnconfirmed = 0
+  walletData.balances = {}
+  walletData.balancesUnconfirmed = {}
+  walletData.txs = {}
+  walletData.keys = {}
+  walletData.allAmount = 0
+  walletData.allAmountUnconfirmed = 0
   for (let i in addresses) {
     let address = new Address(addresses[i])
     let addr = address.getAddress()
     let data = Block.getAddressBalance(address.getAddressRaw())
     let dataUnconfirmed = Tx.getAddressBalanceUnconfirmed(address.getAddressRaw())
-    balances[addr] = data.balance
-    balancesUnconfirmed[addr] = dataUnconfirmed.balance
-    txs[addr] = data.txs
-    keys[addr] = address.getKeys()
-    allAmount += data.balance
-    allAmountUnconfirmed += dataUnconfirmed.balance
+    walletData.balances[addr] = data.balance
+    walletData.balancesUnconfirmed[addr] = dataUnconfirmed.balance
+    walletData.txs[addr] = data.txs
+    walletData.keys[addr] = address.getKeys()
+    walletData.allAmount += data.balance
+    walletData.allAmountUnconfirmed += dataUnconfirmed.balance
   }
   return addresses.length
 }
 
 var sendData = (socket) => {
   socket.json.send({
-    balances: balances,
-    balancesUnconfirmed: balancesUnconfirmed,
-    txs: txs,
-    allAmount: (allAmount / 100000000).toFixed(8),
-    allAmountUnconfirmed: (allAmountUnconfirmed / 100000000).toFixed(8)
+    balances: walletData.balances,
+    balancesUnconfirmed: walletData.balancesUnconfirmed,
+    txs: walletData.txs,
+    allAmount: (walletData.allAmount / 100000000).toFixed(8),
+    allAmountUnconfirmed: (walletData.allAmountUnconfirmed / 100000000).toFixed(8)
+  })
+}
+
+var sendCoins = (walletData, data, callback) => {
+  data.amount = data.amount || 0
+  data.amountm = data.amountm || 0
+  data.fee = data.fee || 0
+  
+  if (!Address.isValid(data.address)) {
+    callback({type: 'error', message: 'Enter correct address'})
+    return
+  }
+  
+  let toSend = parseInt(data.amount) * 100000000 + parseInt(data.amountm)
+  if (toSend <= 0) {
+    callback({type: 'error', message: 'Enter correct sum'})
+    return
+  }
+  let toReceive = toSend
+  
+  let txFee = parseInt(data.fee)
+  txFee *= 100000000
+  if (txFee < config.minerMinimalFee) {
+    callback({type: 'error', message: 'Enter correct fee'})
+    return
+  }
+  toSend += txFee
+  
+  if (walletData.allAmount < toSend) {
+    callback({type: 'error', message: 'Not enough micoins'})
+    return
+  }
+  
+  let sortedAddrs = R.sort((a, b) => {
+    return walletData.balances[b] - walletData.balances[a]
+  }, R.keys(walletData.balances))
+  
+  let txIns = []
+  let txOuts = [{address: Address.hashToRaw(data.address), value: toReceive}]
+  let txKeys = []
+  let txKeyId = -1
+  
+  for (let i in sortedAddrs) {
+    if (toSend <= 0) {
+      break
+    }
+    let addr = sortedAddrs[i]
+    
+    txKeys.push({
+      publicKey: walletData.keys[addr].publ
+    })
+    txKeyId++
+    
+    let sortedTxs = R.sort((a, b) => {
+      return a.value - b.value
+    }, walletData.txs[addr])
+    
+    for (let t in sortedTxs) {
+      if (toSend <= 0) {
+        break
+      }
+      let curTx = sortedTxs[t]
+      let value = curTx.value
+      
+      txIns.push({
+        txHash: curTx.hash,
+        outN: curTx.outN,
+        keyId: txKeyId,
+        sign: null,
+        addr: addr
+      })
+      
+      toSend -= value
+    }
+  }
+  
+  if (toSend < 0) {
+    txOuts.push({address: Address.hashToRaw(sortedAddrs[0]), value: -toSend})
+  }
+  let txOutsRaw = Tx.packOuts(txOuts)
+  
+  helper.processList(txIns, {
+    onProcess: (item, callback) => {
+      helper.signData(Buffer.concat([Tx.packHashOutN(item), txOutsRaw]), walletData.keys[item.addr].priv, (sign) => {
+        item.sign = sign
+        delete item.addr
+        callback()
+      })
+    },
+    onReady: () => {
+      let tx = {
+        time: hours.now(),
+        txKeyCount: txKeys.length,
+        txInCount: txIns.length,
+        txOutCount: txOuts.length,
+        txKeys: txKeys,
+        txIns: txIns,
+        txOutsRaw: txOutsRaw
+      }
+      let txPacked = Tx.pack(tx)
+      let txHash = helper.hash(txPacked)
+      Tx.isValid(txHash, txPacked, null, blockchain.getLength(), false, (valid) => {
+        if (valid) {
+          Tx.freeTxAdd(txHash, txPacked, txFee)
+          miner.restart()
+          callback({type: 'success', message: 'Coins has been sent'})
+          
+          synchronizer.broadcastTx(txHash, txPacked)
+        }
+      }, 0, tx)
+    }
   })
 }
 
@@ -168,7 +291,7 @@ var io = require('socket.io').listen(server)
 io.sockets.on('connection', function(socket) {
   socket.on('message', function (data) {
     setInterval(() => {
-      updateData()
+      updateData(wallet, walletData)
       sendData(socket)
     }, 10000)
     if (!opened) {
@@ -177,119 +300,14 @@ io.sockets.on('connection', function(socket) {
       sendData(socket)
     } else if (data.post === 'address') {
       wallet.attachAddress(Address.create())
-      updateData()
+      updateData(wallet, walletData)
       sendData(socket)
     } else if (data.post === 'coins') {
-      data.amount = data.amount || 0
-      data.amountm = data.amountm || 0
-      data.fee = data.fee || 0
-      
-      if (!Address.isValid(data.address)) {
-        socket.json.send({noty: {type: 'error', message: 'Enter correct address'}})
-				return
-      }
-      
-			let toSend = parseInt(data.amount) * 100000000 + parseInt(data.amountm)
-			if (toSend <= 0) {
-				socket.json.send({noty: {type: 'error', message: 'Enter correct sum'}})
-				return
-			}
-      let toReceive = toSend
-      
-			let txFee = parseInt(data.fee)
-      txFee *= 100000000
-			if (txFee < config.minerMinimalFee) {
-				socket.json.send({noty: {type: 'error', message: 'Enter correct fee'}})
-				return
-			}
-      toSend += txFee
-      
-			if (allAmount < toSend) {
-				socket.json.send({noty: {type: 'error', message: 'Not enough micoins'}})
-				return
-			}
-      
-      let sortedAddrs = R.sort((a, b) => {
-				return balances[b] - balances[a]
-			}, R.keys(balances))
-      
-      let txIns = []
-      let txOuts = [{address: Address.hashToRaw(data.address), value: toReceive}]
-      let txKeys = []
-      let txKeyId = -1
-			
-			for (let i in sortedAddrs) {
-				if (toSend <= 0) {
-					break
-				}
-				let addr = sortedAddrs[i]
-        
-        txKeys.push({
-          publicKey: keys[addr].publ
-        })
-        txKeyId++
-				
-				let sortedTxs = R.sort((a, b) => {
-					return a.value - b.value
-				}, txs[addr])
-				
-				for (let t in sortedTxs) {
-					if (toSend <= 0) {
-						break
-					}
-					let curTx = sortedTxs[t]
-					let value = curTx.value
-					
-					txIns.push({
-						txHash: curTx.hash,
-						outN: curTx.outN,
-            keyId: txKeyId,
-						sign: null,
-            addr: addr
-					})
-					
-					toSend -= value
-				}
-			}
-      
-      if (toSend < 0) {
-        txOuts.push({address: Address.hashToRaw(sortedAddrs[0]), value: -toSend})
-      }
-      let txOutsRaw = Tx.packOuts(txOuts)
-      
-			helper.processList(txIns, {
-				onProcess: (item, callback) => {
-          helper.signData(Buffer.concat([Tx.packHashOutN(item), txOutsRaw]), keys[item.addr].priv, (sign) => {
-            item.sign = sign
-            delete item.addr
-            callback()
-          })
-				},
-				onReady: () => {
-					let tx = {
-            time: hours.now(),
-            txKeyCount: txKeys.length,
-            txInCount: txIns.length,
-            txOutCount: txOuts.length,
-            txKeys: txKeys,
-            txIns: txIns,
-            txOutsRaw: txOutsRaw
-          }
-          let txPacked = Tx.pack(tx)
-          let txHash = helper.hash(txPacked)
-          Tx.isValid(txHash, txPacked, null, blockchain.getLength(), false, (valid) => {
-            if (valid) {
-              Tx.freeTxAdd(txHash, txPacked, txFee)
-              miner.restart()
-              updateData()
-              sendData(socket)
-              socket.json.send({noty: {type: 'success', message: 'Coins has been sent'}})
-              
-              synchronizer.broadcastTx(txHash, txPacked)
-            }
-          }, 0, tx)
-				}
-			})
+      sendCoins(walletData, data, (result) => {
+        socket.json.send({noty: result})
+        updateData(wallet, walletData)
+        sendData(socket)
+      })
     }
   })
 })
@@ -313,10 +331,73 @@ app.post('/', function(req, res) {
   } else {
     wallet.open(req.body.password)
   }
-  if (updateData()) {
+  if (updateData(wallet, walletData)) {
     opened = true
     res.send(fs.readFileSync(base + 'wallet.html', 'utf8'))
   } else {
     res.redirect('/')
+  }
+})
+app.post('/api', function(req, res) {
+  let request = req.body
+  if (request.action && (request.action === 'exists') && request.login) {
+    res.send(helper.objToJson({status: 'success', exists: Wallet(request.login).exists()}))
+  } else if (request.action && (request.action === 'open') && def(request.password)) {
+    let wallet = Wallet(request.login || 'wallet')
+    let created = wallet.create(request.password)
+    let logged = false
+    if (created) {
+      wallet.attachAddress(Address.create())
+      logged = true
+    } else {
+      logged = wallet.open(req.body.password)
+    }
+    let wid = null
+    do {
+      wid = helper.bufToHex(helper.randomId(32))
+    } while (walletsData[wid])
+    if (logged) {
+      wallets[wid] = wallet
+      walletsData[wid] = {
+        balances: {},
+        balancesUnconfirmed: {},
+        txs: {},
+        keys: {},
+        allAmount: 0,
+        allAmountUnconfirmed: 0
+      }
+      res.send(helper.objToJson({status: 'success', wid: wid}))
+    } else {
+      res.send(helper.objToJson({status: 'error'}))
+    }
+  } else if (request.action && (request.action === 'close') && request.wid) {
+    delete walletsData[request.wid]
+    delete wallets[request.wid]
+    res.send(helper.objToJson({status: 'success'}))
+  } else if (request.action && (request.action === 'info') && request.wid) {
+    if (wallets[request.wid] && walletsData[request.wid]) {
+      let data = walletsData[request.wid]
+      updateData(wallets[request.wid], data)
+      res.send(helper.objToJson({
+        balances: data.balances,
+        balancesUnconfirmed: data.balancesUnconfirmed,
+        txs: data.txs,
+        allAmount: data.allAmount,
+        allAmountUnconfirmed: data.allAmountUnconfirmed
+      }))
+    } else {
+      res.send(helper.objToJson({status: 'error'}))
+    }
+  } else if (request.action && (request.action === 'send') && def(request.address) && def(request.amount) && def(request.amountm) && def(request.fee) && def(request.wid)) {
+    if (wallets[request.wid] && walletsData[request.wid]) {
+      updateData(wallets[request.wid], walletsData[request.wid])
+      sendCoins(walletsData[request.wid], request, (result) => {
+        res.send(helper.objToJson(result))
+      })
+    } else {
+      res.send(helper.objToJson({status: 'error'}))
+    }
+  } else {
+    res.send(helper.objToJson({status: 'error'}))
   }
 })
