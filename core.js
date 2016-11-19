@@ -108,6 +108,9 @@ setTimeout(() => {
   console.log('F10 - quit')
   console.log(storage.servers)
   setTimeout(() => {
+    console.log('CORE: blockchain caching...')
+    synchronizer.cache()
+    console.log('CORE: blockchain cached')
     console.log('CORE: connection may take some time')
     net.connect(config)
   }, 1000)
