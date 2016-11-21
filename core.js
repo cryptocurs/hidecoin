@@ -228,7 +228,7 @@ var sendCoins = (walletData, data, callback) => {
     
     let sortedTxs = R.sort((a, b) => {
       return a.value - b.value
-    }, walletData.txs[addr])
+    }, R.filter(tx => !tx.spent, walletData.txs[addr]))
     
     for (let t in sortedTxs) {
       if (toSend <= 0) {
