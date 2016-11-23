@@ -13,6 +13,7 @@ const hours = require('./lib/Hours')
 const storage = require('./lib/Storage')
 const Address = require('./lib/Address')
 const blockchain = require('./lib/Blockchain')
+const Block = require('./lib/Block')
 const net = require('./lib/Net')
 const miner = require('./lib/Miner')
 const synchronizer = require('./lib/Synchronizer')
@@ -90,6 +91,11 @@ var screen = blessed.screen({
 
 screen.render()
 
+screen.key('f7', () => {
+  let lastBlock = Block.getLast()
+  console.log('Last block: #' + lastBlock.id + ' ' + lastBlock.hash.toString('hex'))
+})
+
 screen.key('f8', () => {
   console.log(storage.servers)
 })
@@ -106,7 +112,6 @@ screen.key('f10', () => {
 hours.sync()
 setTimeout(() => {
   console.log('F10 - quit')
-  console.log(storage.servers)
   setTimeout(() => {
     console.log('CORE: blockchain caching...')
     synchronizer.cache()
