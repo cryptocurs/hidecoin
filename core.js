@@ -128,7 +128,6 @@ const bodyParser = require('body-parser')
 const login = process.argv[2] || 'wallet'
 const base = __dirname + '/templates/'
 
-const Block = require('./lib/Block')
 const Tx = require('./lib/Tx')
 const Wallet = require('./lib/Wallet')
 const wallet = Wallet(login)
