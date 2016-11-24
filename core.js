@@ -5,7 +5,6 @@ const config = require('./config')
 console.log(config)
 
 const fs = require('fs')
-const blessed = require('blessed')
 const R = require('ramda')
 
 const helper = require('./lib/helper')
@@ -17,6 +16,11 @@ const Block = require('./lib/Block')
 const net = require('./lib/Net')
 const miner = require('./lib/Miner')
 const synchronizer = require('./lib/Synchronizer')
+const ifc = require('./lib/Interface')
+
+function log(...data) {
+  storage.trigger('log', ...data)
+}
 
 storage.logIgnoreModules = ['P2P']
 
@@ -31,21 +35,21 @@ setInterval(() => {
 }, 60000)
 
 storage.on('fatalError', (msg) => {
-  screen.destroy()
-  console.log('Fatal error: ' + msg)
+  ifc.close()
+  log('Fatal error: ' + msg)
   process.exit(0)
 })
 
 net.once('error', (msg) => {
-  screen.destroy()
-  console.log(msg)
+  ifc.close()
+  log(msg)
   process.exit(0)
 })
 
 net.once('online', () => {
-  console.log('CORE: Synchronizing blockchain...')
+  log('CORE: Synchronizing blockchain...')
   synchronizer.remote(() => {
-    console.log('CORE: Blockchain synchronized')
+    log('CORE: Blockchain synchronized')
     if (config.minerMode) {
       miner.run(R.map(i => Address.hashToRaw(i), config.minerAddresses))
     }
@@ -62,7 +66,7 @@ var onNewBlock = (hash, block, unpacked) => {
       deleted++
     }
   }
-  console.log('CORE: Free txs deleted: ' + deleted)
+  log('CORE: Free txs deleted: ' + deleted)
   
   miner.restart()
 }
@@ -77,7 +81,7 @@ synchronizer.on('blockFoundAccept', (hash, block, unpacked) => {
 
 synchronizer.on('txInfoAccept', (hash, tx, fee) => {
   if (fee >= config.minerMinimalFee) {
-    console.log('CORE: Free tx accepted')
+    log('CORE: Free tx accepted')
     Tx.freeTxAdd(hash, tx, fee)
     synchronizer.broadcastTx(hash, tx)
     
@@ -85,38 +89,32 @@ synchronizer.on('txInfoAccept', (hash, tx, fee) => {
   }
 })
 
-var screen = blessed.screen({
-  smartCSR: true
-})
-
-screen.render()
-
-screen.key('f7', () => {
+ifc.key('f7', () => {
   let lastBlock = Block.getLast()
-  console.log('Last block: #' + lastBlock.id + ' ' + lastBlock.hash.toString('hex'))
+  log('Last block: #' + lastBlock.id + ' ' + lastBlock.hash.toString('hex'))
 })
 
-screen.key('f8', () => {
-  console.log(storage.servers)
+ifc.key('f8', () => {
+  log(storage.servers)
 })
 
-screen.key('f9', () => {
-  console.log('CORE: current time', hours.now())
+ifc.key('f9', () => {
+  log('CORE: current time', hours.now())
 })
 
-screen.key('f10', () => {
+ifc.key('f10', () => {
   storage.flush()
   process.exit(0)
 })
 
 hours.sync()
 setTimeout(() => {
-  console.log('F10 - quit')
+  log('F10 - quit')
   setTimeout(() => {
-    console.log('CORE: blockchain caching...')
+    log('CORE: blockchain caching...')
     synchronizer.cache()
-    console.log('CORE: blockchain cached')
-    console.log('CORE: connection may take some time')
+    log('CORE: blockchain cached')
+    log('CORE: connection may take some time')
     net.connect(config)
   }, 1000)
 }, 2000)
@@ -133,10 +131,13 @@ const Wallet = require('./lib/Wallet')
 const wallet = Wallet(login)
 const walletData = {
   balances: {},
+  balancesSoft: {},
   balancesUnconfirmed: {},
   txs: {},
+  txsSoft: {},
   keys: {},
   allAmount: 0,
+  allAmountSoft: 0,
   allAmountUnconfirmed: 0
 }
 const wallets = {}
@@ -150,21 +151,27 @@ var def = (value) => {
 var updateData = (wallet, walletData) => {
   let addresses = wallet.getContent()
   walletData.balances = {}
+  walletData.balancesSoft = {}
   walletData.balancesUnconfirmed = {}
   walletData.txs = {}
+  walletData.txsSoft = {}
   walletData.keys = {}
   walletData.allAmount = 0
+  walletData.allAmountSoft = 0
   walletData.allAmountUnconfirmed = 0
   for (let i in addresses) {
     let address = new Address(addresses[i])
     let addr = address.getAddress()
-    let data = Block.getAddressBalance(address.getAddressRaw())
+    let data = Block.getAddressBalanceSep(address.getAddressRaw())
     let dataUnconfirmed = Tx.getAddressBalanceUnconfirmed(address.getAddressRaw())
-    walletData.balances[addr] = data.balance
+    walletData.balances[addr] = data.balanceHard
+    walletData.balancesSoft[addr] = data.balanceSoft
     walletData.balancesUnconfirmed[addr] = dataUnconfirmed.balance
-    walletData.txs[addr] = data.txs
+    walletData.txs[addr] = data.txsHard
+    walletData.txsSoft[addr] = data.txsSoft
     walletData.keys[addr] = address.getKeys()
-    walletData.allAmount += data.balance
+    walletData.allAmount += data.balanceHard
+    walletData.allAmountSoft += data.balanceSoft
     walletData.allAmountUnconfirmed += dataUnconfirmed.balance
   }
   return addresses.length
@@ -173,9 +180,12 @@ var updateData = (wallet, walletData) => {
 var sendData = (socket) => {
   socket.json.send({
     balances: walletData.balances,
+    balanceSoft: walletData.balanceSoft,
     balancesUnconfirmed: walletData.balancesUnconfirmed,
     txs: walletData.txs,
+    txsSoft: walletData.txsSoft,
     allAmount: (walletData.allAmount / 100000000).toFixed(8),
+    allAmountSoft: (walletData.allAmountSoft / 100000000).toFixed(8),
     allAmountUnconfirmed: (walletData.allAmountUnconfirmed / 100000000).toFixed(8)
   })
 }

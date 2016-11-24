@@ -32,11 +32,13 @@ function notify(type, message) {
           <div class="text-info" id="loading">Connecting...</div>
           <div class="text-warning">1 XHD = 100 000 000 micoins</div>
           <div>Balance: <span id="allAmount"></span> XHD</div>
+          <div class="text-warning"><30 confirm. balance: <span id="allAmountSoft"></span> XHD</div>
           <div class="text-danger">Unconfirmed balance: <span id="allAmountUnconfirmed"></span> XHD</div>
           <div id="balances"></div>
             <form class="form-inline" role="form" id="create">
               <button type="submit" class="btn btn-success">Create new address</button>
             </form>
+          <b class="text-warning">Note that you can spend coins only from transactions which have at least 30 confirmations.</b>
           <div id="send-coins">
             <form class="form-horizontal" role="form" id="send">
               <div class="form-group">
@@ -92,6 +94,10 @@ socket.on('message', function (data) {
     for (var i in data.balances) {
       $('#balances').append(i + ' : ' + data.balances[i] / 100000000 + ' XHD<br>');
     }
+    $('#balancesSoft').html('');
+    for (var i in data.balancesUnconfirmed) {
+      $('#balancesSoft').append(i + ' : ' + data.balancesUnconfirmed[i] / 100000000 + ' XHD<br>');
+    }
     $('#balancesUnconfirmed').html('');
     for (var i in data.balancesUnconfirmed) {
       $('#balancesUnconfirmed').append(i + ' : ' + data.balancesUnconfirmed[i] / 100000000 + ' XHD<br>');
@@ -99,6 +105,9 @@ socket.on('message', function (data) {
   }
   if (data.allAmount) {
     $('#allAmount').html(data.allAmount);
+  }
+  if (data.allAmountSoft) {
+    $('#allAmountSoft').html(data.allAmountSoft);
   }
   if (data.allAmountUnconfirmed) {
     $('#allAmountUnconfirmed').html(data.allAmountUnconfirmed);
