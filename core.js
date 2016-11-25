@@ -89,6 +89,20 @@ synchronizer.on('txInfoAccept', (hash, tx, fee) => {
   }
 })
 
+ifc.key('f5', () => {
+  if (storage.session.syncSpeed > 1) {
+    storage.session.syncSpeed--
+  }
+  storage.trigger('stat', {snc: storage.session.syncSpeed})
+})
+
+ifc.key('f6', () => {
+  if (storage.session.syncSpeed < 9) {
+    storage.session.syncSpeed++
+  }
+  storage.trigger('stat', {snc: storage.session.syncSpeed})
+})
+
 ifc.key('f8', () => {
   log(storage.servers)
 })
