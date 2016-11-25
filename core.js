@@ -89,11 +89,6 @@ synchronizer.on('txInfoAccept', (hash, tx, fee) => {
   }
 })
 
-ifc.key('f7', () => {
-  let lastBlock = Block.getLast()
-  log('Last block: #' + lastBlock.id + ' ' + lastBlock.hash.toString('hex'))
-})
-
 ifc.key('f8', () => {
   log(storage.servers)
 })
@@ -174,6 +169,7 @@ var updateData = (wallet, walletData) => {
     walletData.allAmountSoft += data.balanceSoft
     walletData.allAmountUnconfirmed += dataUnconfirmed.balance
   }
+  
   return addresses.length
 }
 
@@ -329,7 +325,11 @@ io.sockets.on('connection', function(socket) {
   })
 })
 app.get('/', function(req, res) {
-  res.send(fs.readFileSync(base + 'index.html', 'utf8').replace('%LOGIN%', login))
+  if (synchronizer.isReady()) {
+    res.send(fs.readFileSync(base + 'index.html', 'utf8').replace('%LOGIN%', login))
+  } else {
+    res.send('Wait until blockchain synchronization is complete')
+  }
 })
 app.get('/assets/*', function(req, res) {
   let url = req.params[0]
