@@ -1,6 +1,6 @@
 {
   "name": "xhd-core",
-  "version": "0.2.9",
+  "version": "0.2.10",
   "dependencies": {
     "blessed": "^0.1.81",
     "body-parser": "^1.15.2",
