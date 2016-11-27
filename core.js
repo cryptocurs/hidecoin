@@ -36,13 +36,13 @@ setInterval(() => {
 
 storage.on('fatalError', (msg) => {
   ifc.close()
-  log('Fatal error: ' + msg)
+  console.log('Fatal error: ' + msg)
   process.exit(0)
 })
 
 net.once('error', (msg) => {
   ifc.close()
-  log(msg)
+  console.log(msg)
   process.exit(0)
 })
 
