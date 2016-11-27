@@ -103,6 +103,11 @@ ifc.key('f6', () => {
   storage.trigger('stat', {snc: storage.session.syncSpeed})
 })
 
+ifc.key('f7', () => {
+  log('CORE: reset server socket')
+  net.resetServer()
+})
+
 ifc.key('f8', () => {
   log(storage.servers)
 })
