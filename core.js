@@ -93,14 +93,14 @@ ifc.key('f5', () => {
   if (storage.session.syncSpeed > 1) {
     storage.session.syncSpeed--
   }
-  storage.trigger('stat', {snc: storage.session.syncSpeed})
+  storage.session.stat.snc = storage.session.syncSpeed
 })
 
 ifc.key('f6', () => {
   if (storage.session.syncSpeed < 9) {
     storage.session.syncSpeed++
   }
-  storage.trigger('stat', {snc: storage.session.syncSpeed})
+  storage.session.stat.snc = storage.session.syncSpeed
 })
 
 ifc.key('f7', () => {
@@ -110,10 +110,6 @@ ifc.key('f7', () => {
 
 ifc.key('f8', () => {
   log(storage.servers)
-})
-
-ifc.key('f9', () => {
-  log('CORE: current time', hours.now())
 })
 
 ifc.key('f10', () => {
