@@ -18,6 +18,10 @@ const miner = require('./lib/Miner')
 const synchronizer = require('./lib/Synchronizer')
 const ifc = require('./lib/Interface')
 
+storage.config = config
+storage.config.rpcPort = 5839
+const rpcServer = require('./lib/RpcServer')
+
 function log(...data) {
   storage.trigger('log', ...data)
 }
