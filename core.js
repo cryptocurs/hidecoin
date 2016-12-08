@@ -310,6 +310,8 @@ var sendCoins = (walletData, data, callback) => {
           callback({type: 'success', message: 'Coins has been sent'})
           
           synchronizer.broadcastTx(txHash, txPacked)
+        } else {
+          callback({type: 'error', message: Tx.getError()})
         }
       }, 0, tx)
     }
