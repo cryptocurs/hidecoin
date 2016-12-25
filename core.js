@@ -108,8 +108,13 @@ ifc.key('f6', () => {
 })
 
 ifc.key('f7', () => {
-  log('CORE: reset server socket')
-  net.resetServer()
+  if (synchronizer.isPromiscuous()) {
+    synchronizer.setPromiscuous(false)
+    log('CORE: {red-fg}promiscuous mode OFF{/red-fg}')
+  } else {
+    synchronizer.setPromiscuous(true)
+    log('CORE: {green-fg}promiscuous mode ON{/green-fg}')
+  }
 })
 
 ifc.key('f8', () => {
