@@ -70,7 +70,6 @@ var onNewBlock = (hash, block, unpacked) => {
       deleted++
     }
   }
-  log('CORE: Free txs deleted: ' + deleted)
   
   miner.restart()
 }
