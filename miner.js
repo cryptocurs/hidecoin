@@ -36,6 +36,9 @@ for (let i = 2; i < args.length; i++) {
   }
 }
 
+const initNonce = nonce
+var hps = 0
+
 console.log('Configuration')
 console.log('HPC     :', hashesPerCycle)
 console.log('Nonce   :', nonce)
@@ -47,7 +50,7 @@ function continueMining() {
   }
   working = true
   console.log('Requesting fresh data')
-  rpcClient.call('getMiningTask', {nonce: nonce, hpc: hashesPerCycle}, (res) => {
+  rpcClient.call('getMiningTask', {nonce: initNonce, hps: hps}, (res) => {
     if (!res || !res.result) {
       console.log('Request error')
       setTimeout(continueMining, 1000)
@@ -88,8 +91,8 @@ function continueMining() {
     }
     
     const duration = helper.unixTimeMs() - timeStart
-    const speed = parseInt(hashesPerCycle * 1000 / duration)
-    console.log('Min.', speed, 'HPS', Block.unpackDiff(header).toString('hex'))
+    hps = parseInt(hashesPerCycle * 1000 / duration)
+    console.log('Min.', hps, 'HPS', Block.unpackDiff(header).toString('hex'))
     
     working = false
     continueMining()
