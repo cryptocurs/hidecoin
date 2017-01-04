@@ -47,7 +47,7 @@ function continueMining() {
   }
   working = true
   console.log('Requesting fresh data')
-  rpcClient.call('getMiningTask', {}, (res) => {
+  rpcClient.call('getMiningTask', {nonce: nonce, hpc: hashesPerCycle}, (res) => {
     if (!res || !res.result) {
       console.log('Request error')
       setTimeout(continueMining, 1000)
