@@ -61,8 +61,9 @@ function continueMining() {
     const result = res.result
     if (!result.active) {
       console.log('Mining suspended')
-      setTimeout(continueMining, 1000)
+      hps = 0
       working = false
+      setTimeout(continueMining, 1000)
       return
     }
     
