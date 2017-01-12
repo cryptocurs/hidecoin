@@ -2,6 +2,8 @@
 
 console.log('XHD Core loading...')
 const config = require('./config')
+const storage = require('./lib/Storage')
+storage.config = config
 console.log(config)
 
 const fs = require('fs')
@@ -9,7 +11,6 @@ const R = require('ramda')
 
 const helper = require('./lib/helper')
 const hours = require('./lib/Hours')
-const storage = require('./lib/Storage')
 const Address = require('./lib/Address')
 const blockchain = require('./lib/Blockchain')
 const Block = require('./lib/Block')
@@ -18,7 +19,6 @@ const miner = require('./lib/Miner')
 const synchronizer = require('./lib/Synchronizer')
 const ifc = require('./lib/Interface')
 
-storage.config = config
 storage.config.rpcPort = 5839
 const rpcServer = require('./lib/RpcServer')
 
@@ -260,7 +260,7 @@ var sendCoins = (walletData, data, callback) => {
     txKeyId++
     
     let sortedTxs = R.sort((a, b) => {
-      return a.value - b.value
+      return b.value - a.value
     }, R.filter(tx => !tx.spent && !tx.spentFreeTxs, walletData.txs[addr]))
     
     for (let t in sortedTxs) {
