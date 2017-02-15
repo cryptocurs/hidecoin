@@ -1,10 +1,5 @@
 {
   "servers": {
-    "109.120.176.21": {
-      "port":7438,
-      "isIpv6":false,
-      "rating":100
-    },
     "31.41.47.106": {
       "port":7438,
       "isIpv6":false,
