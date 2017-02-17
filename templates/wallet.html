@@ -87,7 +87,7 @@ socket.on('message', function (data) {
   }
   if (data.noty) {
     notify(data.noty.type, data.noty.message);
-    $('#submit').show();
+    $('#submit').attr('disabled', false);
   }
   if (data.balances) {
     $('#balances').html('');
@@ -120,7 +120,7 @@ socket.on('disconnect', function() {
 });
 
 $(document).on('submit', '#send', function() {
-  $('#submit').hide();
+  $('#submit').attr('disabled', true);
   socket.json.send({post: 'coins', address: $('#address').val(), amount: $('#amount').val(), amountm: $('#amountm').val(), fee: $('#fee').val()});
   return false;
 });

@@ -1,6 +1,6 @@
 'use strict'
 
-console.log('XHD Core loading...')
+console.log('XHD Core 0.3.0 loading...')
 const config = require('./config')
 const storage = require('./lib/Storage')
 storage.config = config
@@ -19,7 +19,12 @@ const miner = require('./lib/Miner')
 const synchronizer = require('./lib/Synchronizer')
 const ifc = require('./lib/Interface')
 
-storage.config.rpcPort = 5839
+if (!storage.config.rpcHost) {
+  storage.config.rpcHost = '127.0.0.1'
+}
+if (!storage.config.rpcPort) {
+  storage.config.rpcPort = 5839
+}
 const rpcServer = require('./lib/RpcServer')
 
 function log(...data) {
@@ -147,56 +152,23 @@ const base = __dirname + '/templates/'
 const Tx = require('./lib/Tx')
 const Wallet = require('./lib/Wallet')
 const wallet = Wallet(login)
-const walletData = {
-  balances: {},
-  balancesSoft: {},
-  balancesUnconfirmed: {},
-  txs: {},
-  txsSoft: {},
-  keys: {},
-  allAmount: 0,
-  allAmountSoft: 0,
-  allAmountUnconfirmed: 0
-}
-const wallets = {}
-const walletsData = {}
+let walletData = {}
 var opened = false
 
-var def = (value) => {
+const def = (value) => {
   return value !== undefined
 }
 
-var updateData = (wallet, walletData) => {
-  let addresses = wallet.getContent()
-  walletData.balances = {}
-  walletData.balancesSoft = {}
-  walletData.balancesUnconfirmed = {}
-  walletData.txs = {}
-  walletData.txsSoft = {}
-  walletData.keys = {}
-  walletData.allAmount = 0
-  walletData.allAmountSoft = 0
-  walletData.allAmountUnconfirmed = 0
-  for (let i in addresses) {
-    let address = new Address(addresses[i])
-    let addr = address.getAddress()
-    let data = Block.getAddressBalanceSep(address.getAddressRaw())
-    let dataUnconfirmed = Tx.getAddressBalanceUnconfirmed(address.getAddressRaw())
-    walletData.balances[addr] = data.balanceHard
-    walletData.balancesSoft[addr] = data.balanceSoft
-    walletData.balancesUnconfirmed[addr] = dataUnconfirmed.balance
-    walletData.txs[addr] = data.txsHard
-    walletData.txsSoft[addr] = data.txsSoft
-    walletData.keys[addr] = address.getKeys()
-    walletData.allAmount += data.balanceHard
-    walletData.allAmountSoft += data.balanceSoft
-    walletData.allAmountUnconfirmed += dataUnconfirmed.balance
-  }
-  
-  return addresses.length
+const updateData = () => {
+  log('WLT', '<UpdateData> Balances ready in ' + helper.stopwatch(() => {
+    wallet.updateData()
+  }) + 'ms')
+  walletData = wallet.getData()
+  return wallet.getContent().length
 }
 
-var sendData = (socket) => {
+const sendData = (socket) => {
+  const walletData = wallet.getData()
   socket.json.send({
     balances: walletData.balances,
     balanceSoft: walletData.balanceSoft,
@@ -209,154 +181,49 @@ var sendData = (socket) => {
   })
 }
 
-var sendCoins = (walletData, data, callback) => {
-  data.amount = data.amount || 0
-  data.amountm = data.amountm || 0
-  data.fee = data.fee || 0
-  
-  if (!Address.isValid(data.address)) {
-    callback({type: 'error', message: 'Enter correct address'})
-    return
-  }
-  
-  let toSend = parseInt(data.amount) * 100000000 + parseInt(data.amountm)
-  if (toSend <= 0) {
-    callback({type: 'error', message: 'Enter correct sum'})
-    return
-  }
-  let toReceive = toSend
-  
-  let txFee = parseInt(data.fee)
-  txFee *= 100000000
-  if (txFee < config.minerMinimalFee) {
-    callback({type: 'error', message: 'Enter correct fee'})
-    return
-  }
-  toSend += txFee
-  
-  if (walletData.allAmount < toSend) {
-    callback({type: 'error', message: 'Not enough micoins'})
-    return
-  }
-  
-  let sortedAddrs = R.sort((a, b) => {
-    return walletData.balances[b] - walletData.balances[a]
-  }, R.keys(walletData.balances))
-  
-  let txIns = []
-  let txOuts = [{address: Address.hashToRaw(data.address), value: toReceive}]
-  let txKeys = []
-  let txKeyId = -1
-  
-  for (let i in sortedAddrs) {
-    if (toSend <= 0) {
-      break
-    }
-    let addr = sortedAddrs[i]
-    
-    txKeys.push({
-      publicKey: walletData.keys[addr].publ
-    })
-    txKeyId++
-    
-    let sortedTxs = R.sort((a, b) => {
-      return b.value - a.value
-    }, R.filter(tx => !tx.spent && !tx.spentFreeTxs, walletData.txs[addr]))
-    
-    for (let t in sortedTxs) {
-      if (toSend <= 0) {
-        break
-      }
-      let curTx = sortedTxs[t]
-      let value = curTx.value
-      
-      txIns.push({
-        txHash: curTx.hash,
-        outN: curTx.outN,
-        keyId: txKeyId,
-        sign: null,
-        addr: addr
-      })
-      
-      toSend -= value
-    }
-  }
-  
-  if (toSend < 0) {
-    txOuts.push({address: Address.hashToRaw(sortedAddrs[0]), value: -toSend})
-  }
-  let txOutsRaw = Tx.packOuts(txOuts)
-  
-  helper.processList(txIns, {
-    onProcess: (item, callback) => {
-      helper.signData(Buffer.concat([Tx.packHashOutN(item), txOutsRaw]), walletData.keys[item.addr].priv, (sign) => {
-        item.sign = sign
-        delete item.addr
-        callback()
-      })
-    },
-    onReady: () => {
-      let tx = {
-        time: hours.now(),
-        txKeyCount: txKeys.length,
-        txInCount: txIns.length,
-        txOutCount: txOuts.length,
-        txKeys: txKeys,
-        txIns: txIns,
-        txOutsRaw: txOutsRaw
-      }
-      let txPacked = Tx.pack(tx)
-      let txHash = helper.hash(txPacked)
-      Tx.isValid(txHash, txPacked, null, blockchain.getLength(), false, (valid) => {
-        if (valid) {
-          Tx.freeTxAdd(txHash, txPacked, txFee)
-          miner.restart()
-          callback({type: 'success', message: 'Coins has been sent'})
-          
-          synchronizer.broadcastTx(txHash, txPacked)
-        } else {
-          callback({type: 'error', message: Tx.getError()})
-        }
-      }, 0, tx)
-    }
-  })
+const sendCoins = (data, callback) => {
+  wallet.sendCoins(data, callback)
 }
 
-var app = express()
+const app = express()
 app.use(bodyParser.urlencoded({extended: false}))
-var server = app.listen(config.walletPort, config.walletHost)
-var io = require('socket.io').listen(server)
-io.sockets.on('connection', function(socket) {
-  socket.on('message', function (data) {
-    setInterval(() => {
-      updateData(wallet, walletData)
-      sendData(socket)
-    }, 10000)
+const server = app.listen(config.walletPort, config.walletHost)
+const io = require('socket.io').listen(server)
+var walletTimer = null
+io.sockets.on('connection', (socket) => {
+  if (walletTimer) {
+    clearInterval(walletTimer)
+  }
+  walletTimer = setInterval(() => {
+    updateData()
+    sendData(socket)
+  }, 20000)
+  socket.on('message', (data) => {
     if (!opened) {
       socket.json.send({reload: true})
     } else if (data.get === 'balances') {
       sendData(socket)
     } else if (data.post === 'address') {
       wallet.attachAddress(Address.create())
-      updateData(wallet, walletData)
+      updateData()
       sendData(socket)
     } else if (data.post === 'coins') {
-      sendCoins(walletData, data, (result) => {
+      sendCoins(data, (result) => {
         socket.json.send({noty: result})
-        updateData(wallet, walletData)
+        updateData()
         sendData(socket)
       })
     }
   })
 })
-app.get('/', function(req, res) {
+app.get('/', (req, res) => {
   if (synchronizer.isReady()) {
     res.send(fs.readFileSync(base + 'index.html', 'utf8').replace('%LOGIN%', login))
   } else {
-    res.send('Wait until blockchain synchronization is complete')
+    res.send(fs.readFileSync(base + 'sync.html', 'utf8'))
   }
 })
-app.get('/assets/*', function(req, res) {
+app.get('/assets/*', (req, res) => {
   let url = req.params[0]
   if (R.contains(url, ['bootstrap.min.css'])) {
     res.set('Content-type', 'text/css')
@@ -366,80 +233,17 @@ app.get('/assets/*', function(req, res) {
     res.send(fs.readFileSync(base + url, 'utf8'))
   }
 })
-app.post('/', function(req, res) {
+app.post('/', (req, res) => {
   let created = wallet.create(req.body.password)
   if (created) {
     wallet.attachAddress(Address.create())
   } else {
     wallet.open(req.body.password)
   }
-  if (updateData(wallet, walletData)) {
+  if (updateData()) {
     opened = true
     res.send(fs.readFileSync(base + 'wallet.html', 'utf8'))
   } else {
     res.redirect('/')
-  }
-})
-app.post('/api', function(req, res) {
-  let request = req.body
-  if (request.action && (request.action === 'exists') && request.login) {
-    res.send(helper.objToJson({status: 'success', exists: Wallet(request.login).exists()}))
-  } else if (request.action && (request.action === 'open') && def(request.password)) {
-    let wallet = Wallet(request.login || 'wallet')
-    let created = wallet.create(request.password)
-    let logged = false
-    if (created) {
-      wallet.attachAddress(Address.create())
-      logged = true
-    } else {
-      logged = wallet.open(req.body.password)
-    }
-    let wid = null
-    do {
-      wid = helper.bufToHex(helper.randomId(32))
-    } while (walletsData[wid])
-    if (logged) {
-      wallets[wid] = wallet
-      walletsData[wid] = {
-        balances: {},
-        balancesUnconfirmed: {},
-        txs: {},
-        keys: {},
-        allAmount: 0,
-        allAmountUnconfirmed: 0
-      }
-      res.send(helper.objToJson({status: 'success', wid: wid}))
-    } else {
-      res.send(helper.objToJson({status: 'error'}))
-    }
-  } else if (request.action && (request.action === 'close') && request.wid) {
-    delete walletsData[request.wid]
-    delete wallets[request.wid]
-    res.send(helper.objToJson({status: 'success'}))
-  } else if (request.action && (request.action === 'info') && request.wid) {
-    if (wallets[request.wid] && walletsData[request.wid]) {
-      let data = walletsData[request.wid]
-      updateData(wallets[request.wid], data)
-      res.send(helper.objToJson({
-        balances: data.balances,
-        balancesUnconfirmed: data.balancesUnconfirmed,
-        txs: data.txs,
-        allAmount: data.allAmount,
-        allAmountUnconfirmed: data.allAmountUnconfirmed
-      }))
-    } else {
-      res.send(helper.objToJson({status: 'error'}))
-    }
-  } else if (request.action && (request.action === 'send') && def(request.address) && def(request.amount) && def(request.amountm) && def(request.fee) && def(request.wid)) {
-    if (wallets[request.wid] && walletsData[request.wid]) {
-      updateData(wallets[request.wid], walletsData[request.wid])
-      sendCoins(walletsData[request.wid], request, (result) => {
-        res.send(helper.objToJson(result))
-      })
-    } else {
-      res.send(helper.objToJson({status: 'error'}))
-    }
-  } else {
-    res.send(helper.objToJson({status: 'error'}))
   }
 })
