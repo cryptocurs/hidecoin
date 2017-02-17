@@ -1,6 +1,7 @@
 'use strict'
 
-console.log('XHD Core 0.3.1 loading...')
+const application = require('./package')
+console.log('XHD Core ' + application.version + ' loading...')
 const config = require('./config')
 const storage = require('./lib/Storage')
 storage.config = config
@@ -132,7 +133,6 @@ ifc.key('f10', () => {
 
 hours.sync()
 setTimeout(() => {
-  log('F10 - quit')
   setTimeout(() => {
     log('CORE: blockchain caching...')
     synchronizer.cache()
