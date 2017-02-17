@@ -1,6 +1,6 @@
 'use strict'
 
-console.log('XHD Core 0.3.0 loading...')
+console.log('XHD Core 0.3.1 loading...')
 const config = require('./config')
 const storage = require('./lib/Storage')
 storage.config = config
@@ -151,8 +151,8 @@ const base = __dirname + '/templates/'
 
 const Tx = require('./lib/Tx')
 const Wallet = require('./lib/Wallet')
-const wallet = Wallet(login)
-let walletData = {}
+storage.session.wallet = Wallet(login)
+const {wallet} = storage.session
 var opened = false
 
 const def = (value) => {
@@ -163,7 +163,6 @@ const updateData = () => {
   log('WLT', '<UpdateData> Balances ready in ' + helper.stopwatch(() => {
     wallet.updateData()
   }) + 'ms')
-  walletData = wallet.getData()
   return wallet.getContent().length
 }
 
