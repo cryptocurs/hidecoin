@@ -3,13 +3,21 @@
 const application = require('./package')
 console.log('XHD Core ' + application.version + ' loading...')
 const config = require('./config')
+
+console.log('Checking configuration...')
+if (config.minerMinimalFee >= 100000000) {
+  console.log('\x1b[31mconfig.minerMinimalFee is too big. Recommended value is 1000000.\x1b[0m')
+}
+
 const storage = require('./lib/Storage')
 storage.config = config
+storage.session.version = application.version
 console.log(config)
 
 const fs = require('fs')
 const R = require('ramda')
 
+require('./lib/Debugger')
 const helper = require('./lib/helper')
 const hours = require('./lib/Hours')
 const Address = require('./lib/Address')
@@ -29,7 +37,7 @@ if (!storage.config.rpcPort) {
 const rpcServer = require('./lib/RpcServer')
 
 function log(...data) {
-  storage.trigger('log', ...data)
+  storage.trigger('log', ...data) || console.log(...data)
 }
 
 storage.logIgnoreModules = ['P2P']
@@ -98,39 +106,6 @@ synchronizer.on('txInfoAccept', (hash, tx, fee) => {
   }
 })
 
-ifc.key('f5', () => {
-  if (storage.session.syncSpeed > 1) {
-    storage.session.syncSpeed--
-  }
-  storage.session.stat.snc = storage.session.syncSpeed
-})
-
-ifc.key('f6', () => {
-  if (storage.session.syncSpeed < 9) {
-    storage.session.syncSpeed++
-  }
-  storage.session.stat.snc = storage.session.syncSpeed
-})
-
-ifc.key('f7', () => {
-  if (synchronizer.isPromiscuous()) {
-    synchronizer.setPromiscuous(false)
-    log('CORE: {red-fg}promiscuous mode OFF{/red-fg}')
-  } else {
-    synchronizer.setPromiscuous(true)
-    log('CORE: {green-fg}promiscuous mode ON{/green-fg}')
-  }
-})
-
-ifc.key('f8', () => {
-  log(storage.servers)
-})
-
-ifc.key('f10', () => {
-  storage.flush()
-  process.exit(0)
-})
-
 hours.sync()
 setTimeout(() => {
   setTimeout(() => {
@@ -138,6 +113,40 @@ setTimeout(() => {
     synchronizer.cache()
     log('CORE: blockchain cached')
     log('CORE: connection may take some time')
+    ifc.open()
+    
+    ifc.key('f5', () => {
+      if (storage.session.syncSpeed > 1) {
+        storage.session.syncSpeed--
+      }
+      storage.session.stat.snc = storage.session.syncSpeed
+    })
+
+    ifc.key('f6', () => {
+      if (storage.session.syncSpeed < 9) {
+        storage.session.syncSpeed++
+      }
+      storage.session.stat.snc = storage.session.syncSpeed
+    })
+
+    ifc.key('f7', () => {
+      if (synchronizer.isPromiscuous()) {
+        synchronizer.setPromiscuous(false)
+        log('CORE: {red-fg}promiscuous mode OFF{/red-fg}')
+      } else {
+        synchronizer.setPromiscuous(true)
+        log('CORE: {green-fg}promiscuous mode ON{/green-fg}')
+      }
+    })
+
+    ifc.key('f8', () => {
+      log(storage.servers)
+    })
+
+    ifc.key('f10', () => {
+      storage.flush()
+      process.exit(0)
+    })
     net.connect(config)
   }, 1000)
 }, 2000)
@@ -170,7 +179,7 @@ const sendData = (socket) => {
   const walletData = wallet.getData()
   socket.json.send({
     balances: walletData.balances,
-    balanceSoft: walletData.balanceSoft,
+    balancesSoft: walletData.balancesSoft,
     balancesUnconfirmed: walletData.balancesUnconfirmed,
     txs: walletData.txs,
     txsSoft: walletData.txsSoft,
@@ -189,14 +198,26 @@ app.use(bodyParser.urlencoded({extended: false}))
 const server = app.listen(config.walletPort, config.walletHost)
 const io = require('socket.io').listen(server)
 var walletTimer = null
+
+var freeTxChanged = false
+storage.on('freeTxAdd', () => {
+  freeTxChanged = true
+})
+storage.on('freeTxDelete', () => {
+  freeTxChanged = true
+})
+
 io.sockets.on('connection', (socket) => {
   if (walletTimer) {
     clearInterval(walletTimer)
   }
   walletTimer = setInterval(() => {
-    updateData()
-    sendData(socket)
-  }, 20000)
+    if (freeTxChanged || wallet.isBlockchainChanged()) {
+      freeTxChanged = false
+      updateData()
+      sendData(socket)
+    }
+  }, 10000)
   socket.on('message', (data) => {
     if (!opened) {
       socket.json.send({reload: true})
@@ -209,7 +230,7 @@ io.sockets.on('connection', (socket) => {
     } else if (data.post === 'coins') {
       sendCoins(data, (result) => {
         socket.json.send({noty: result})
-        updateData()
+        // updateData()
         sendData(socket)
       })
     }
@@ -241,7 +262,11 @@ app.post('/', (req, res) => {
   }
   if (updateData()) {
     opened = true
-    res.send(fs.readFileSync(base + 'wallet.html', 'utf8'))
+    let errors = ''
+    if (config.minerMinimalFee >= 100000000) {
+      errors += '<div class="alert alert-danger">config.minerMinimalFee is too big. Recommended value is 1000000. You will be charged an extra fee if you do not change this setting.</div>'
+    }
+    res.send(fs.readFileSync(base + 'wallet.html', 'utf8').replace('%ERRORS%', errors))
   } else {
     res.redirect('/')
   }

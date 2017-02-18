@@ -39,7 +39,7 @@ module.exports = {
   /* Minimal fee
   *  Minimal fee in micoins for tx to be included in block
   */
-  minerMinimalFee: 100000000,
+  minerMinimalFee: 100000,
   
   /* Wallet port
   *  Port to load wallet in browser: localhost:7439
