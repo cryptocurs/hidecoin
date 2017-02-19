@@ -2,6 +2,14 @@
 
 const application = require('./package')
 console.log('XHD Core ' + application.version + ' loading...')
+
+const fs = require('fs')
+const configPath = __dirname + '/config.js'
+const configPathInit = __dirname + '/init-config.js'
+if (!fs.existsSync(configPath)) {
+  console.log('Creating configuration file...')
+  fs.writeFileSync(configPath, fs.readFileSync(configPathInit))
+}
 const config = require('./config')
 
 console.log('Checking configuration...')
@@ -14,7 +22,6 @@ storage.config = config
 storage.session.version = application.version
 console.log(config)
 
-const fs = require('fs')
 const R = require('ramda')
 
 require('./lib/Debugger')
