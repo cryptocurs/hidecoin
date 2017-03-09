@@ -4,6 +4,11 @@
       "port":7438,
       "isIpv6":false,
       "rating":100
+    },
+    "212.47.228.139": {
+      "port":7438,
+      "isIpv6":false,
+      "rating":100
     }
   }
 }
