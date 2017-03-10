@@ -23,16 +23,18 @@ function notify(type, message) {
 </script>
 </head>
 <body>
-<div class="container" style="margin-top: 100px">
+<div class="container" style="margin-top: 25px">
   <div class="row">
     <div class="col-xs-12 text-center">
       <div class="panel panel-info">
         <div class="panel-heading">Information</div>
         <div class="panel-body">
+          <div class="pull-right" style="font-size:24px;font-weight:bold"><span id="allAmountSum"></span> XHD</div>
+          <div style="clear:both"></div>
           %ERRORS%
           <div class="text-info" id="loading">Connecting...</div>
           <div class="text-warning">1 XHD = 100 000 000 micoins</div>
-          <div>Balance: <span id="allAmount"></span> XHD</div>
+          <div>Confirmed balance: <span id="allAmount"></span> XHD</div>
           <div class="text-warning"><30 confirm. balance: <span id="allAmountSoft"></span> XHD</div>
           <div class="text-danger">Unconfirmed balance: <span id="allAmountUnconfirmed"></span> XHD</div>
           <b class="text-warning">Note that you can spend coins only from transactions which have at least 30 confirmations.</b>
@@ -99,14 +101,16 @@ socket.on('message', function (data) {
       $('#balances').append('<tr><td>' + i + '</td><td>' + data.balances[i] / 100000000 + ' XHD</td><td class="text-warning">' + data.balancesSoft[i] / 100000000 + ' XHD</td><td class="text-danger">' + data.balancesUnconfirmed[i] / 100000000 + ' XHD</td></tr>');
     }
   }
-  if (data.allAmount) {
+  var allAmountSum = 0;
+  if (data.allAmount && data.allAmountSoft && data.allAmountUnconfirmed) {
+    allAmountSum += parseFloat(data.allAmount);
+    allAmountSum += parseFloat(data.allAmountSoft);
+    allAmountSum += parseFloat(data.allAmountUnconfirmed);
+    
     $('#allAmount').html(data.allAmount);
-  }
-  if (data.allAmountSoft) {
     $('#allAmountSoft').html(data.allAmountSoft);
-  }
-  if (data.allAmountUnconfirmed) {
     $('#allAmountUnconfirmed').html(data.allAmountUnconfirmed);
+    $('#allAmountSum').html(allAmountSum);
   }
 });
 socket.on('disconnect', function() {
