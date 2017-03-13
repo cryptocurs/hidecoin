@@ -10,8 +10,6 @@ const Block = require('./lib/Block')
 const Packet = require('./lib/Packet')
 
 storage.config = config
-storage.config.listenRpcPort = 5840
-storage.config.callRpcPort = 5839
 const rpcClient = require('./lib/RpcClient')
 
 const log = (...data) => {
