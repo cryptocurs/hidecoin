@@ -49,5 +49,11 @@ module.exports = {
   /* Wallet host
   *  Host to load wallet in browser. Default: 'localhost'
   */
-  walletHost: 'localhost'
+  walletHost: 'localhost',
+  
+  /* Single-threaded
+  *  If set to 'true' then application will be single-threaded (as 0.3.x). Used for devices with Windows or
+  *  with small amount of RAM
+  */
+  singleThreaded: false
 }
