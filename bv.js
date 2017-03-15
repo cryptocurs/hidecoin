@@ -19,7 +19,7 @@ if (id === 'e') {
     })
   }
 } else if (id === 'r') {
-  blockchain.removeLast(null, 5)
+  blockchain.removeLast(null, process.argv[3] || 5)
 } else if (id === '--repair') {
   let hasErrors = true
   while (hasErrors) {
