@@ -39,7 +39,7 @@ module.exports = {
   /* Minimal fee
   *  Minimal fee in micoins for tx to be included in block
   */
-  minerMinimalFee: 1000000,
+  minerMinimalFee: 10000,
   
   /* Minimal fee per byte
   *  Minimal fee per byte in micoins for tx to be included in block
