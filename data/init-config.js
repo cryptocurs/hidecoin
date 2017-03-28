@@ -60,5 +60,5 @@ module.exports = {
   *  If set to 'true' then application will be single-threaded (as 0.3.x). Used for devices with Windows or
   *  with small amount of RAM
   */
-  singleThreaded: false
+  singleThreaded: true
 }
