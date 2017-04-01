@@ -36,16 +36,6 @@ module.exports = {
   */
   minerAddresses: ['--YOUR-HIDECOIN-ADDRESS--'],
   
-  /* Minimal fee
-  *  Minimal fee in micoins for tx to be included in block
-  */
-  minerMinimalFee: 10000,
-  
-  /* Minimal fee per byte
-  *  Minimal fee per byte in micoins for tx to be included in block
-  */
-  minerMinimalFeePerByte: 30,
-  
   /* Wallet port
   *  Port to load wallet in browser: localhost:7439
   */
