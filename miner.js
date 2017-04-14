@@ -24,7 +24,7 @@ hours.sync((err, res) => {
   
   log('Miner runned')
 
-  var hashesPerCycle = 100000
+  var hashesPerCycle = 1000000
   var nonce = 0
   var working = false
 
